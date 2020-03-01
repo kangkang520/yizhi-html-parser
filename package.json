@@ -1,0 +1,16 @@
+{
+	"name": "yizhi-html-parser",
+	"version": "1.0.0",
+	"description": "",
+	"main": "dist/index.js",
+	"types": "typing/index.d.ts",
+	"scripts": {},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devDependencies": {
+		"@types/node": "^12.7.5",
+		"ts-node": "^8.4.1",
+		"typescript": "^3.6.3"
+	}
+}

@@ -1,0 +1,4 @@
+node_modules/**/*
+typing/**/*
+dist/**/*
+.DS_Store
