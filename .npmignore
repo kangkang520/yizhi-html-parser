@@ -1,0 +1,8 @@
+src
+node_modules
+test
+.vscode
+debug.js
+nodemon.json
+tsconfig.json
+package-lock.json

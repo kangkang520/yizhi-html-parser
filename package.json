@@ -1,6 +1,6 @@
 {
 	"name": "yizhi-html-parser",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "",
 	"main": "dist/index.js",
 	"types": "typing/index.d.ts",
