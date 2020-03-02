@@ -57,7 +57,7 @@ export class Element extends HTMLObject {
 	}
 
 	/** 属性列表 */
-	public attrs() {
+	public get attrs() {
 		return this._attrs
 	}
 }
