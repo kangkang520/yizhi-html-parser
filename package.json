@@ -1,10 +1,16 @@
 {
 	"name": "yizhi-html-parser",
-	"version": "1.0.0",
+	"version": "1.0.2",
 	"description": "",
 	"main": "dist/index.js",
 	"types": "typing/index.d.ts",
-	"scripts": {},
+	"scripts": {
+		"build": "tes"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kangkang520/yizhi-html-parser.git"
+	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
@@ -12,8 +18,5 @@
 		"@types/node": "^12.7.5",
 		"ts-node": "^8.4.1",
 		"typescript": "^3.6.3"
-	},
-	"dependencies": {
-		"js-tokens": "^5.0.0"
 	}
 }
