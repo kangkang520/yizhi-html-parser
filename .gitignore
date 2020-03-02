@@ -2,3 +2,4 @@ node_modules/**/*
 typing/**/*
 dist/**/*
 .DS_Store
+package-lock.json

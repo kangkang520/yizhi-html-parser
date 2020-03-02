@@ -1,4 +1,6 @@
 import { HTMLObject, Element, TextNode, Comment, Document } from "./objects"
+import { selfCloseingTags } from "./self-closing"
+
 
 /**
  * HTML解析选项
@@ -31,9 +33,20 @@ export class HTMLParser {
 	//当前元素
 	private current: HTMLObject
 
-	constructor(public readonly content: string, public readonly option?: IHTMLParserOption) {
+	/** HTML文档内容 */
+	public readonly content: string
+
+	/** 转换选项 */
+	public readonly option: IHTMLParserOption
+
+	constructor(content: string, option?: IHTMLParserOption) {
+		this.content = content
+		const opt = this.option = option || {}
 		this.current = this.document = new Document()
-		this.autoCloseTags = ['img', 'meta']
+		this.autoCloseTags = [
+			...selfCloseingTags,
+			...(opt.coverSystemAutoCloseTags && opt.autoCloseTags) ? opt.autoCloseTags : []
+		]
 	}
 
 	/**
@@ -57,8 +70,9 @@ export class HTMLParser {
 	}
 
 	//正则表达式验证目前字符串
-	private test(regexp: RegExp, n = 0) {
-		return regexp.test(this.content.substr(this.index + n))
+	private test(regext: RegExp, n = 0, maxLen = 20) {
+		const subs = this.content.substr(this.index + n, maxLen)
+		return regext.test(subs)
 	}
 
 	//检测字符是否为空白
@@ -66,11 +80,12 @@ export class HTMLParser {
 		return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 	}
 
-	//获取带处理的字符串
+	//获取带处理的字符在调试时会用到它，用来观察即将处理的字符串
 	private get todo() {
 		return this.content.substr(this.index)
 	}
 
+	//读取文档，用于检测元素类型并发起相关调用
 	private read() {
 		while (true) {
 			const c = this.ch()
@@ -98,18 +113,22 @@ export class HTMLParser {
 	private readString(tag: string) {
 		//跳过开头
 		this.next()
+		let start = this.index
 		//读取
-		let buffer = ''
 		while (true) {
 			const c = this.ch()
 			if (!c) break
 			//结束了
 			if (c == tag) {
+				const str = this.content.substring(start, this.index)
 				this.next()
-				return buffer
+				return str
 			}
-			buffer += c
-			this.next()
+			//读取到转义字符串
+			if (c == '\\') {
+				this.next(2)
+			}
+			else this.next()
 		}
 		//文档异常结束
 	}
@@ -138,7 +157,7 @@ export class HTMLParser {
 
 	//读取元素
 	private readElement() {
-		//跳过开始
+		//跳过开始的<
 		this.next()
 		//如果有空白跳过它
 		this.skipWhite()
@@ -281,8 +300,8 @@ export class HTMLParser {
 
 	//读取节点
 	private readNode() {
-		//检测当前标签是不是script标签
-		if ((this.current instanceof Element) && this.current.name == 'script') return this.readScript()
+		//检测当前标签是不是script或style标签
+		if ((this.current instanceof Element) && (this.current.name == 'script' || this.current.name == 'style')) return this.readCodeText(this.current.name)
 		//记录开始
 		const start = this.index
 		//开始读取
@@ -298,21 +317,115 @@ export class HTMLParser {
 		}
 	}
 
-	//读取script标签的内容
-	private readScript() {
+	//读取代码文本（如script和style中的）的内容
+	private readCodeText(tagName: string) {
 		let start = this.index
 		while (true) {
 			const c = this.ch()
-			//</script>
-			if (c == '<' && this.test(/^<\s*\/\s*script\s*>/)) {
+			if (!c) return
+			//如果遇到结束符则退出
+			if (c == '<' && this.test(new RegExp(`^<\/${tagName}>`, 'i'))) {
 				const script = this.content.substring(start, this.index)
 				const node = new TextNode(script)
 				this.current.addChild(node)
 				break
 			}
+			//过滤正则表达式或注释(/xxx/ /**/ //)（要注意的是有可能是除法运算）
+			else if (c == '/') {
+				//处理多行注释(js和css都是支持的)
+				if (this.ch(1) == '*') this.readTextMultLineComment()
+				//如果是js则过滤单行注释和正则表达式
+				else if (tagName == 'script') {
+					//单行注释
+					if (this.ch(1) == '/') this.readJSOneLineComment()
+					//否则需要检测是不是正则表达式，
+					//往以前的字符中查找，
+					//		如果遇到“(”则是正则表达式
+					//		如果遇到“=”则是正则表达式
+					//		如果遇到“;”则是正则表达式
+					else {
+						//检测是不是正则表达式
+						let isReg: boolean = false
+						for (let i = this.index - 1; i >= 0; i--) {
+							const c = this.content[i]
+							//忽略空白
+							if (this.white(c)) continue
+							//遇到了非空字符，检测一下
+							isReg = c == '(' || c == '=' || c == ';'
+							break
+						}
+						//如果是则处理
+						if (isReg) this.readJSRegexp()
+						//否则跳过就玩
+						else this.next()
+					}
+				}
+				//其他的不管了
+				else this.next()
+			}
 			//读取字符串
-			else if (c == '"' || c == "'" || c == '`') this.readString(c)
+			else if (c == '"' || c == "'" || c == '`') {
+				this.readString(c)
+			}
 			//其他不管
+			else this.next()
+		}
+	}
+
+	//读取js的正则表达式 /xxx/
+	private readJSRegexp() {
+		//跳过当前字符（正则表达式开始字符/）
+		this.next()
+		//逐个读取，直到遇见/
+		while (true) {
+			const c = this.ch()
+			//正则表达式结束
+			if (c == '/') {
+				//读取完该字符后结束
+				this.next()
+				break
+			}
+			//转义字符串处理，跳过两个字符即可
+			else if (c == '\\') this.next(2)
+			//其他的直接跳过
+			else this.next()
+		}
+	}
+
+	//读取js的单行注释
+	private readJSOneLineComment() {
+		//跳过开头的两个斜杠
+		this.next(2)
+		//一直读取，知道遇到换行为止
+		while (true) {
+			const c = this.ch()
+			//异常结束不做处理
+			if (!c) return
+			//读取完换行后结束
+			else if (c == '\n') {
+				this.next()
+				break
+			}
+			//接着读取
+			else this.next()
+		}
+	}
+
+	//读取文本中的多行注释
+	private readTextMultLineComment() {
+		//跳过开头的/*
+		this.next(2)
+		//一直读取，知道遇到结束位置
+		while (true) {
+			const c = this.ch()
+			//异常结束，不做处理
+			if (!c) return
+			//如果遇到结束，读取完结束符退出
+			else if (c == '*' && this.ch(1) == '/') {
+				this.next(2)
+				break
+			}
+			//否则一直读取
 			else this.next()
 		}
 	}
