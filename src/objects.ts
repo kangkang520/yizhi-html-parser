@@ -55,6 +55,11 @@ export class Element extends HTMLObject {
 	public addAttr(name: string, val: string | boolean) {
 		this._attrs.push({ name, value: val })
 	}
+
+	/** 属性列表 */
+	public attrs() {
+		return this._attrs
+	}
 }
 
 /**
